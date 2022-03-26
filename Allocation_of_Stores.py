@@ -76,14 +76,11 @@ def run_store_allocation(file,sheet,relaxation_Rank):
 
     model.StoresNeed = Param(model.Networks, initialize=rule_StoresNeed, doc='Needs')
     
-    # Creation of assigment variable. Since in this python program it is formulated as an assgiment problem
-    # there is no need of specifying a binary nature. It is enough to work with a continous variable
-    # which have the bounds 0 and 1 due to the mathematical properties of the restrictions. This is faster to solve
-    # than addressing an NP-hard integer programming model and the results are the same.
+    # Creation of assigment variable. Since in this python program it is formulated as an assgiment problem, there is no need of specifying a binary nature. It is enough to work with a continous variable
+    # This is faster to solve than NP-hard integer programming models and the results are the same.
     model.x = Var(model.Stores, model.Networks, domain=NonNegativeReals, bounds=(0,1), doc='Assignment')
 
-    # Relaxation variable since with the limit of three times a store can be a hub there was no feasible solution
-    # according to the provided input data. This decision was made after a short talk with Iris.
+    # Relaxation variable when a store has to be assigned more than 3 times due to lack of available options
     model.extra = Var(model.Stores, domain=NonNegativeReals, doc='Relaxation')
 
     # Constraint for the maximum number of times that a store can be selected as hub, including a relaxation term.
@@ -96,18 +93,15 @@ def run_store_allocation(file,sheet,relaxation_Rank):
         return sum(model.x[s,n] for s in model.Stores) >= model.StoresNeed[n]
     model.need_assign = Constraint(model.Networks, rule=need_assign_rule, doc='Available production time at Departments')
 
-    # Objective function which minimizes the overall some of ranks in order to aim at selecting s hubs those stores
-    # that are best ranked. It also includes the relaxation variable with a cost that it's much higher than any rank
-    # so it works as a relaxation and a store is picked as a hub more than three times only when it is inevitable
+    # Objective function which minimizes the overall some of ranks in order select optimal stores
     def objective_rule(model):
         return sum((model.x[s,n] * model.Rank[s,n] + model.extra[s] * relaxation_Rank) for s in model.Stores for n in model.Networks)
     model.objective = Objective(rule=objective_rule, sense=minimize, doc='Define objective function')
 
-    # Solve the problem using CBC, which is an open source solver
+    # Solve the problem using CBC
     opt = SolverFactory("cbc")
     results = opt.solve(model)
 
-    # Write some basic data of the resolution process on the terminal
     results.write()
     
     # Print the results in an organized way in a results.txt file
@@ -123,14 +117,10 @@ def run_store_allocation(file,sheet,relaxation_Rank):
 
 def main():
 
-    # Set the Excel file and the sheet where is the Data. Remember to filter beforehand networks which require
-    # more hubs than available stores. In case this problem is not correct
-    # you can detected in a lately stage when you see that the solver pick assigments with extralarger naive cost.
     file = "Input_Data.xlsx"
     sheet = "Data_filtered"
 
-    # Pick a cost of relaxation. The model includes a relaxation variable with a rank that it's much higher than any rank
-    # so it works as a relaxation and a store is picked as a hub more than three times only when it is inevitable
+    # Pick a cost of relaxation so that a store is picked as a hub more than three times only when it is inevitable
     relaxation_Rank = 1000
 
     run_store_allocation(file,sheet,relaxation_Rank)
